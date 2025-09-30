@@ -36,28 +36,24 @@ def is_model_available():
         return False
 
 def ask_ollama(question: str, module: str = "general") -> str:
-    """Send question to Ollama with better error handling"""
+    """Send question to Ollama with NO THINKING prompt"""
     
     # Quick local greeting handling
     if re.match(r'^\s*(hi|hello|hey|hiya|yo)[\s!.]*$', question, flags=re.I):
         return "Hello 👋 How can I assist you with Sapience HCM today?"
     
-    # Try models in order of preference - CUSTOM MODEL FIRST
-    models_to_try = [
-        "sapience-hcm-assistant",  # Your custom trained model
-        "deepseek-r1:1.5b",        # Original model
-        "llama2:3b"                # Fallback model
-    ]
+    # Try models in order of preference
+    models_to_try = ["sapience-hcm-assistant", "deepseek-r1:1.5b", "llama2:3b"]
     
     for model in models_to_try:
         try:
-            print(f"🔄 Trying model: {model}")
-            
-            # Enhanced system prompt for better responses
+            # STRICT SYSTEM PROMPT - NO THINKING ALLOWED
             system_prompt = f"""You are Sapience HCM Assistant specialized in {module} module. 
-Provide concise, step-by-step answers about HCM processes.
-Keep responses under 3 sentences and focus on practical steps.
-If you don't know something, say so and suggest contacting support."""
+Provide direct, concise answers about HCM processes.
+DO NOT show your thinking process.
+DO NOT use phrases like "let me think" or "first, I should".
+Answer directly and professionally.
+Keep responses under 3 sentences."""
 
             payload = {
                 "model": model,
@@ -65,38 +61,22 @@ If you don't know something, say so and suggest contacting support."""
                 "stream": False,
                 "options": {
                     "temperature": 0.3,
-                    "num_predict": 150,  # Limit response length
-                    "top_k": 40,
-                    "top_p": 0.9,
-                    "seed": 42
+                    "num_predict": 100,
+                    "top_k": 40
                 }
             }
             
-            # Shorter timeout - if it takes more than 8 seconds, try next model
             response = requests.post(OLLAMA_URL, json=payload, timeout=8)
             response.raise_for_status()
             result = response.json()
             answer = (result.get("response") or result.get("text") or "").strip()
             
-            # Validate the response
-            if (answer and 
-                len(answer) > 10 and 
-                "error" not in answer.lower() and
-                "timeout" not in answer.lower()):
-                print(f"✅ Model {model} responded successfully")
+            if answer and len(answer) > 10 and "error" not in answer.lower():
                 return answer
             else:
-                print(f"❌ Model {model} returned invalid response: {answer}")
                 continue
                 
-        except requests.exceptions.Timeout:
-            print(f"⏰ Model {model} timeout - trying next model")
-            continue
-        except requests.exceptions.ConnectionError:
-            print(f"🔌 Model {model} connection error - trying next model")
-            continue
-        except Exception as e:
-            print(f"❌ Model {model} error: {str(e)}")
+        except Exception:
             continue
     
     # If all models fail, use intelligent fallback
@@ -146,7 +126,345 @@ def get_intelligent_fallback(question: str, module: str) -> str:
     # Default fallback
     return f"I specialize in {module} functionality. For detailed assistance with '{question}', please check the knowledge base or contact your system administrator."
 
+
+def detect_module(question):
+    """Automatically detect which module a question belongs to"""
+    question_lower = question.lower()
+    
+    # Module keywords and their weights
+    module_keywords = {
+        "payroll": {
+            "keywords": [
+                "payroll", "salary", "payslip", "wage", "payment", "tax", 
+                "deduction", "bonus", "compensation", "earnings", "pay stub",
+                "income", "withholding", "paycheck", "direct deposit"
+            ],
+            "weight": 1.0
+        },
+        "attendance": {
+            "keywords": [
+                "attendance", "time", "clock", "punch", "present", "absent",
+                "late", "early", "overtime", "shift", "schedule", "timesheet",
+                "leave", "vacation", "sick", "holiday", "break", "hours worked"
+            ],
+            "weight": 1.0
+        },
+        "hr": {
+            "keywords": [
+                "employee", "hr", "human resources", "onboarding", "termination",
+                "profile", "record", "department", "position", "manager",
+                "performance", "review", "promotion", "transfer", "contract",
+                "document", "policy", "compliance", "training", "development"
+            ],
+            "weight": 1.0
+        },
+        "ess": {
+            "keywords": [
+                "self-service", "ess", "my profile", "my payslip", "my leave",
+                "personal", "information", "update", "change", "request",
+                "apply", "submit", "portal", "dashboard", "my account"
+            ],
+            "weight": 1.0
+        }
+    }
+    
+    # Calculate scores for each module
+    module_scores = {}
+    
+    for module, data in module_keywords.items():
+        score = 0
+        for keyword in data["keywords"]:
+            if keyword in question_lower:
+                score += data["weight"]
+                # Extra points for exact matches
+                if f" {keyword} " in f" {question_lower} ":
+                    score += 0.5
+        
+        module_scores[module] = score
+    
+    # Find the module with highest score
+    best_module = "general"
+    best_score = 0
+    
+    for module, score in module_scores.items():
+        if score > best_score:
+            best_score = score
+            best_module = module
+    
+    # Only return specific module if score is above threshold
+    if best_score >= 1.0:
+        print(f"🔍 Module detection: '{question}' → {best_module} (score: {best_score})")
+        return best_module
+    else:
+        print(f"🔍 Module detection: '{question}' → general (score: {best_score})")
+        return "general"
+
+def beautify_response(raw_answer, question, module):
+    """Convert raw knowledge base answers into beautiful, formatted responses"""
+    
+    # Clean the raw answer first
+    clean_answer = raw_answer.strip()
+    
+    # If it's already short and clean, return as is
+    if len(clean_answer) < 150 and '\n' not in clean_answer:
+        return clean_answer
+    
+    # Define beautification patterns for different modules
+    beautification_rules = {
+        "attendance": {
+            "patterns": [
+                r"step.*?by.*?step",
+                r"follow these steps",
+                r"instructions:",
+                r"process:"
+            ],
+            "template": "🎯 **Here's how to {action}:**\n\n{steps}\n\n💡 **Pro Tip:** {tip}"
+        },
+        "payroll": {
+            "patterns": [
+                r"process.*?payroll",
+                r"run.*?salary",
+                r"calculate.*?tax"
+            ],
+            "template": "💰 **Payroll Process:**\n\n{steps}\n\n✅ **Important:** {important}"
+        },
+        "hr": {
+            "patterns": [
+                r"add.*?employee",
+                r"onboarding",
+                r"create.*?profile"
+            ],
+            "template": "👥 **HR Procedure:**\n\n{steps}\n\n📋 **Required:** {requirements}"
+        },
+        "ess": {
+            "patterns": [
+                r"update.*?profile",
+                r"self.*?service",
+                r"my.*?information"
+            ],
+            "template": "🖥️ **Employee Self-Service:**\n\n{steps}\n\n🔒 **Note:** {note}"
+        }
+    }
+    
+    # Try to extract steps and structure from the raw answer
+    structured_response = extract_and_structure(clean_answer, question, module)
+    
+    return structured_response
+
+def extract_and_structure(text, question, module):
+    """Extract structured information from raw text"""
+    
+    # Convert to lowercase for easier matching
+    text_lower = text.lower()
+    question_lower = question.lower()
+    
+    # Common patterns to look for
+    steps = extract_steps(text)
+    tips = extract_tips(text)
+    important_points = extract_important_points(text)
+    
+    # Build beautiful response
+    response_parts = []
+    
+    # Add emoji based on module
+    emoji_map = {
+        "attendance": "⏰",
+        "payroll": "💰", 
+        "hr": "👥",
+        "ess": "🖥️",
+        "general": "💡"
+    }
+    
+    emoji = emoji_map.get(module, "💡")
+    
+    # Header
+    response_parts.append(f"{emoji} **{get_action_phrase(question_lower, module)}**")
+    response_parts.append("")
+    
+    # Add steps if found
+    if steps:
+        response_parts.append("**📋 Steps to follow:**")
+        for i, step in enumerate(steps, 1):
+            response_parts.append(f"{i}. {step}")
+        response_parts.append("")
+    
+    # If no structured steps found, create a concise summary
+    elif len(text) > 200:
+        summary = create_concise_summary(text)
+        response_parts.append("**🎯 Quick Guide:**")
+        response_parts.append(summary)
+        response_parts.append("")
+    else:
+        response_parts.append(text)
+        response_parts.append("")
+    
+    # Add tips if available
+    if tips:
+        response_parts.append("**💡 Pro Tips:**")
+        for tip in tips[:2]:  # Limit to 2 tips
+            response_parts.append(f"• {tip}")
+        response_parts.append("")
+    
+    # Add important points
+    if important_points:
+        response_parts.append("**✅ Important:**")
+        for point in important_points[:2]:  # Limit to 2 points
+            response_parts.append(f"• {point}")
+    
+    # Add module-specific footer
+    footer = get_module_footer(module)
+    if footer:
+        response_parts.append("")
+        response_parts.append(footer)
+    
+    return "\n".join(response_parts)
+
+def extract_steps(text):
+    """Extract step-by-step instructions from text"""
+    steps = []
+    
+    # Look for numbered steps (1., 2., etc.)
+    numbered_pattern = r'\b\d+\.\s*([^.!?]+[.!?])'
+    numbered_matches = re.findall(numbered_pattern, text)
+    if numbered_matches:
+        steps.extend([match.strip() for match in numbered_matches])
+    
+    # Look for step phrases
+    step_patterns = [
+        r'step\s*\d+[:\s]*([^.!?]+[.!?])',
+        r'first[,\s]*([^.!?]+[.!?])',
+        r'next[,\s]*([^.!?]+[.!?])',
+        r'then[,\s]*([^.!?]+[.!?])',
+        r'finally[,\s]*([^.!?]+[.!?])'
+    ]
+    
+    for pattern in step_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        steps.extend([match.strip() for match in matches])
+    
+    # If no structured steps found, split by sentences and take key ones
+    if not steps and len(text) > 100:
+        sentences = re.split(r'[.!?]+', text)
+        key_sentences = [s.strip() for s in sentences if len(s.strip()) > 20 and len(s.strip()) < 150]
+        steps = key_sentences[:5]  # Take up to 5 key sentences
+    
+    return steps[:8]  # Limit to 8 steps
+
+def extract_tips(text):
+    """Extract tips and pro tips from text"""
+    tips = []
+    
+    tip_patterns = [
+        r'pro tip[:\s]*([^.!?]+[.!?])',
+        r'tip[:\s]*([^.!?]+[.!?])',
+        r'note[:\s]*([^.!?]+[.!?])',
+        r'recommend[^.!?]+[.!?]',
+        r'suggest[^.!?]+[.!?]'
+    ]
+    
+    for pattern in tip_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        tips.extend([match.strip() for match in matches])
+    
+    return tips[:3]  # Limit to 3 tips
+
+def extract_important_points(text):
+    """Extract important points from text"""
+    important = []
+    
+    important_patterns = [
+        r'important[:\s]*([^.!?]+[.!?])',
+        r'crucial[:\s]*([^.!?]+[.!?])',
+        r'required[:\s]*([^.!?]+[.!?])',
+        r'must[^.!?]+[.!?]',
+        r'ensure[^.!?]+[.!?]'
+    ]
+    
+    for pattern in important_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        important.extend([match.strip() for match in matches])
+    
+    return important[:3]  # Limit to 3 points
+
+def create_concise_summary(text):
+    """Create a concise summary from long text"""
+    sentences = re.split(r'[.!?]+', text)
+    
+    # Filter for meaningful sentences
+    meaningful_sentences = []
+    for sentence in sentences:
+        clean_sentence = sentence.strip()
+        if (len(clean_sentence) > 20 and 
+            len(clean_sentence) < 150 and
+            not any(word in clean_sentence.lower() for word in ['however', 'although', 'nevertheless'])):
+            meaningful_sentences.append(clean_sentence)
+    
+    # Take 2-3 most relevant sentences
+    if meaningful_sentences:
+        return " ".join(meaningful_sentences[:3])
+    else:
+        # Fallback: return first 150 characters
+        return text[:150] + "..." if len(text) > 150 else text
+
+def get_action_phrase(question, module):
+    """Get appropriate action phrase based on question"""
+    action_map = {
+        "attendance": {
+            "add": "Mark Attendance",
+            "mark": "Record Attendance", 
+            "create": "Create Attendance Entry",
+            "update": "Update Attendance",
+            "delete": "Remove Attendance Record"
+        },
+        "payroll": {
+            "process": "Process Payroll",
+            "run": "Run Salary Calculation",
+            "calculate": "Calculate Payments",
+            "generate": "Generate Payslips"
+        },
+        "hr": {
+            "add": "Add Employee",
+            "create": "Create Employee Profile",
+            "onboard": "Onboard New Employee",
+            "update": "Update Employee Record"
+        },
+        "ess": {
+            "update": "Update Personal Information",
+            "view": "View My Details",
+            "request": "Submit Request",
+            "apply": "Apply for Leave"
+        }
+    }
+    
+    module_actions = action_map.get(module, {})
+    for action_word, action_phrase in module_actions.items():
+        if action_word in question:
+            return action_phrase
+    
+    # Default action phrases
+    default_phrases = {
+        "attendance": "Manage Attendance",
+        "payroll": "Handle Payroll",
+        "hr": "HR Management",
+        "ess": "Employee Self-Service",
+        "general": "Assistance"
+    }
+    
+    return default_phrases.get(module, "Procedure")
+
+def get_module_footer(module):
+    """Get module-specific footer"""
+    footers = {
+        "attendance": "📍 Need help with specific attendance scenarios? Ask me about late marks, overtime, or bulk entries!",
+        "payroll": "📍 Have payroll calculation questions? Ask me about taxes, deductions, or payment methods!",
+        "hr": "📍 Need HR support? Ask me about employee records, documents, or compliance!",
+        "ess": "📍 Employee questions? I can help with profile updates, leave requests, and more!",
+        "general": "📍 Need more specific help? Just ask!"
+    }
+    return footers.get(module, "")
+
 # ============ BASIC ENDPOINTS ============
+
 
 @app.route("/", methods=["GET"])
 def root():
@@ -168,23 +486,40 @@ def health_check():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    """Chat with AI help desk"""
+    """Chat with AI help desk - WITH AUTO MODULE DETECTION"""
     data = request.get_json()
     
     if not data or 'question' not in data:
         return jsonify({"error": "Missing question"}), 400
     
     question = data['question']
-    module = data.get('module', 'general')
+    module = data.get('module', 'auto')  # Default to 'auto' for detection
     user_id = data.get('user_id')
     
     start_time = time.time()
     
-    # 1. Search knowledge base first
-    kb_results = knowledge_db.search_knowledge(question, module, limit=3)
+    print(f"💬 CHAT: '{question}'")
     
+    # AUTO MODULE DETECTION
+    if module == 'auto' or not module:
+        detected_module = detect_module(question)
+        module = detected_module
+        print(f"🎯 Auto-detected module: {module}")
+    else:
+        print(f"🎯 Using specified module: {module}")
+    
+    # 1. Search knowledge base
+    kb_results = knowledge_db.search_knowledge(question, module, limit=5)
+    
+    # Use the FIRST result if we have any matches
     if kb_results:
         best_match = kb_results[0]
+        print(f"✅ KNOWLEDGE BASE MATCH: Using '{best_match['question']}' from {module} module")
+        
+        # BEAUTIFY THE RESPONSE
+        raw_answer = best_match['answer']
+        beautiful_answer = beautify_response(raw_answer, question, module)
+        
         response_time = time.time() - start_time
         
         # Update usage count
@@ -199,51 +534,100 @@ def chat():
         
         # Log conversation
         knowledge_db.log_conversation(
-            user_id, question, best_match['answer'],
+            user_id, question, beautiful_answer,
             module, "knowledge_base", 0.95, response_time
         )
         
         return jsonify({
-            "answer": best_match['answer'],
+            "answer": beautiful_answer,
             "source": "knowledge_base",
             "module": module,
+            "detected_module": module if module != data.get('module', 'auto') else "auto",
             "confidence": 0.95,
             "response_time": response_time
         })
     
-    # 2. Use Ollama for complex questions
+    print(f"❌ NO KNOWLEDGE BASE MATCH in {module} - Using AI/fallback")
+    
+    # 2. Only use Ollama if no knowledge base match
     if is_ollama_running():
-        ai_answer = ask_ollama(question, module)
-        response_time = time.time() - start_time
-        
-        knowledge_db.log_conversation(
-            user_id, question, ai_answer,
-            module, "ai_model", 0.80, response_time
-        )
-        
-        return jsonify({
-            "answer": ai_answer,
-            "source": "ai_model",
-            "module": module,
-            "confidence": 0.80,
-            "response_time": response_time
-        })
-    else:
-        response_time = time.time() - start_time
-        fallback_answer = "I can help with HCM questions. Try asking about payroll, attendance, or employee self-service."
-        
-        knowledge_db.log_conversation(
-            user_id, question, fallback_answer,
-            module, "fallback", 0.50, response_time
-        )
-        
-        return jsonify({
-            "answer": fallback_answer,
-            "source": "fallback",
-            "module": module,
-            "confidence": 0.50,
-            "response_time": response_time
-        })
+        try:
+            ai_answer = ask_ollama(question, module)
+            response_time = time.time() - start_time
+            
+            # Clean the AI response
+            cleaned_answer = clean_ai_response(ai_answer)
+            
+            knowledge_db.log_conversation(
+                user_id, question, cleaned_answer,
+                module, "ai_model", 0.80, response_time
+            )
+            
+            return jsonify({
+                "answer": cleaned_answer,
+                "source": "ai_model",
+                "module": module,
+                "detected_module": module if module != data.get('module', 'auto') else "auto",
+                "confidence": 0.80,
+                "response_time": response_time
+            })
+        except Exception as e:
+            print(f"❌ AI ERROR: {e}")
+    
+    # 3. Use fallback
+    response_time = time.time() - start_time
+    fallback_answer = get_intelligent_fallback(question, module)
+    
+    knowledge_db.log_conversation(
+        user_id, question, fallback_answer,
+        module, "fallback", 0.50, response_time
+    )
+    
+    return jsonify({
+        "answer": fallback_answer,
+        "source": "fallback",
+        "module": module,
+        "detected_module": module if module != data.get('module', 'auto') else "auto",
+        "confidence": 0.50,
+        "response_time": response_time
+    })
+
+def clean_ai_response(answer):
+    """Clean AI response by removing thinking tags and unwanted content"""
+    import re
+    
+    # Remove <think> tags and content
+    answer = re.sub(r'<think>.*?</think>', '', answer, flags=re.DOTALL)
+    
+    # Remove [INST] tags
+    answer = re.sub(r'\[INST\].*?\[/INST\]', '', answer, flags=re.DOTALL)
+    
+    # Remove any XML-like thinking tags
+    answer = re.sub(r'<.*?>', '', answer)
+    
+    # Remove "Okay, let me think" type phrases
+    thinking_phrases = [
+        r'okay, let me think',
+        r'first, i should',
+        r'let me recall',
+        r'i remember that',
+        r'based on my knowledge',
+        r'looking at this',
+        r'let me analyze',
+        r'i need to consider'
+    ]
+    
+    for phrase in thinking_phrases:
+        answer = re.sub(phrase, '', answer, flags=re.IGNORECASE)
+    
+    # Clean up extra whitespace
+    answer = re.sub(r'\s+', ' ', answer).strip()
+    
+    # If answer is empty after cleaning, provide default
+    if not answer or len(answer) < 10:
+        return "I apologize, but I couldn't generate a proper response. Please try rephrasing your question."
+    
+    return answer
 
 # ============ KNOWLEDGE BASE ENDPOINTS ============
 
@@ -265,15 +649,90 @@ def add_knowledge_item():
     return jsonify({"message": "Knowledge item added successfully", "status": "success"})
 
 @app.route("/knowledge", methods=["GET"])
-def search_knowledge():
-    """Search knowledge base"""
-    query = request.args.get('query', '')
-    module = request.args.get('module')
-    limit = int(request.args.get('limit', 10))
+def search_knowledge(self, query, module=None, limit=5):
+    """Search knowledge base with SIMPLE matching"""
+    conn = sqlite3.connect(self.db_path)
+    cursor = conn.cursor()
     
-    results = knowledge_db.search_knowledge(query, module, limit)
+    # Clean the query
+    clean_query = query.strip().lower()
+    print(f"🔍 SEARCH: '{clean_query}' in module: '{module}'")
     
-    return jsonify({"results": results, "count": len(results)})
+    if module and clean_query:
+        # SIMPLE search - just look for the query in questions
+        cursor.execute('''
+            SELECT * FROM knowledge_items 
+            WHERE module = ? AND (
+                question LIKE ? OR 
+                question LIKE ? OR
+                answer LIKE ?
+            )
+            ORDER BY 
+                CASE 
+                    WHEN question LIKE ? THEN 3
+                    WHEN question LIKE ? THEN 2
+                    ELSE 1
+                END DESC,
+                usage_count DESC
+            LIMIT ?
+        ''', (
+            module,
+            f'%{clean_query}%',      # Anywhere in question
+            f'{clean_query}%',       # Starts with query
+            f'%{clean_query}%',      # Anywhere in answer
+            f'{clean_query}%',       # For scoring - starts with
+            f'%{clean_query}%',      # For scoring - contains
+            limit
+        ))
+    elif module:
+        cursor.execute('''
+            SELECT * FROM knowledge_items 
+            WHERE module = ?
+            ORDER BY usage_count DESC
+            LIMIT ?
+        ''', (module, limit))
+    elif clean_query:
+        cursor.execute('''
+            SELECT * FROM knowledge_items 
+            WHERE question LIKE ? OR answer LIKE ?
+            ORDER BY 
+                CASE 
+                    WHEN question LIKE ? THEN 2
+                    ELSE 1
+                END DESC,
+                usage_count DESC
+            LIMIT ?
+        ''', (
+            f'%{clean_query}%',
+            f'%{clean_query}%',
+            f'{clean_query}%',
+            limit
+        ))
+    else:
+        cursor.execute('''
+            SELECT * FROM knowledge_items 
+            ORDER BY usage_count DESC
+            LIMIT ?
+        ''', (limit,))
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            'id': row[0],
+            'module': row[1],
+            'question': row[2],
+            'answer': row[3],
+            'keywords': json.loads(row[4]) if row[4] else [],
+            'usage_count': row[5]
+        })
+    
+    conn.close()
+    
+    print(f"✅ SEARCH RESULTS: {len(results)} matches")
+    for result in results:
+        print(f"   - '{result['question']}'")
+    
+    return results
 
 @app.route("/knowledge/<int:item_id>", methods=["DELETE"])
 def delete_knowledge_item(item_id):
@@ -638,6 +1097,58 @@ def debug_routes():
                 "methods": list(rule.methods)
             })
     return jsonify({"routes": routes})
+
+
+@app.route("/debug/search", methods=["POST"])
+def debug_search():
+    """Debug knowledge base search"""
+    data = request.get_json()
+    question = data.get('question', '')
+    module = data.get('module', 'general')
+    
+    print(f"🔍 DEBUG: Searching for: '{question}' in module: '{module}'")
+    
+    # Search knowledge base
+    kb_results = knowledge_db.search_knowledge(question, module, limit=5)
+    
+    print(f"📊 DEBUG: Found {len(kb_results)} results")
+    for i, result in enumerate(kb_results):
+        print(f"  {i+1}. Question: '{result['question']}'")
+        print(f"     Answer: '{result['answer']}'")
+        print(f"     Relevance: {result.get('relevance', 'N/A')}")
+        print(f"     Module: {result['module']}")
+    
+    return jsonify({
+        "question": question,
+        "module": module,
+        "results": kb_results,
+        "count": len(kb_results)
+    })
+
+@app.route("/debug/knowledge", methods=["GET"])
+def debug_knowledge_base():
+    """Show all knowledge base items"""
+    conn = sqlite3.connect(knowledge_db.db_path)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id, module, question, answer FROM knowledge_items ORDER BY id")
+    items = cursor.fetchall()
+    
+    conn.close()
+    
+    knowledge_items = []
+    for item in items:
+        knowledge_items.append({
+            "id": item[0],
+            "module": item[1],
+            "question": item[2],
+            "answer": item[3]
+        })
+    
+    return jsonify({
+        "knowledge_items": knowledge_items,
+        "count": len(knowledge_items)
+    })
 
 if __name__ == "__main__":
     print("🚀 Starting Sapience HCM AI Help Desk API (Flask)...")
