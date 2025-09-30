@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sapience HCM - Admin Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2563eb;
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            background: #f8fafc;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2563eb;
+        }
+
+        .stat-label {
+            color: #64748b;
+            margin-top: 5px;
+        }
+
+        .tabs {
+            display: flex;
+            background: #e2e8f0;
+            border-bottom: 1px solid #cbd5e0;
+        }
+
+        .tab {
+            padding: 15px 25px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: white;
+            border-bottom: 3px solid #2563eb;
+            color: #2563eb;
+            font-weight: bold;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 25px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1em;
+        }
+
+        .filter-select {
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: white;
+            min-width: 150px;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        .actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: all 0.3s;
+        }
+
+        .edit-btn {
+            background: #fbbf24;
+            color: white;
+        }
+
+        .edit-btn:hover {
+            background: #f59e0b;
+        }
+
+        .delete-btn {
+            background: #ef4444;
+            color: white;
+        }
+
+        .delete-btn:hover {
+            background: #dc2626;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #64748b;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-input, .form-textarea, .form-select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus, .form-textarea:focus, .form-select:focus {
+            outline: none;
+            border-color: #2563eb;
+        }
+
+        .form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .keywords-input {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .keyword-tag {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .remove-keyword {
+            background: none;
+            border: none;
+            color: #0369a1;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 25px;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .empty-state i {
+            font-size: 3em;
+            margin-bottom: 15px;
+            color: #cbd5e0;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .page-btn {
+            padding: 8px 15px;
+            border: 1px solid #d1d5db;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .page-btn.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
+        @media (max-width: 768px) {
+            .toolbar {
+                flex-direction: column;
+            }
+            
+            .search-box {
+                min-width: 100%;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            th, td {
+                padding: 10px;
+                font-size: 0.9em;
+            }
+            
+            .actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <div class="header">
+            <h1><i class="fas fa-robot"></i> Sapience HCM Admin Dashboard</h1>
+            <p>Manage Knowledge Base & Training Data</p>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalKnowledge">0</div>
+                <div class="stat-label">Knowledge Items</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalTraining">0</div>
+                <div class="stat-label">Training Data</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalModules">0</div>
+                <div class="stat-label">Modules</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="apiStatus">❌</div>
+                <div class="stat-label">API Status</div>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('knowledge')">
+                <i class="fas fa-database"></i> Knowledge Base
+            </button>
+            <button class="tab" onclick="switchTab('training')">
+                <i class="fas fa-graduation-cap"></i> Training Data
+            </button>
+            <button class="tab" onclick="switchTab('analytics')">
+                <i class="fas fa-chart-bar"></i> Analytics
+            </button>
+        </div>
+
+        <!-- Alerts -->
+        <div id="alert" class="alert"></div>
+
+        <!-- Knowledge Base Tab -->
+        <div id="knowledge-tab" class="tab-content active">
+            <div class="toolbar">
+                <input type="text" id="searchKnowledge" class="search-box" placeholder="Search knowledge base..." onkeyup="searchKnowledge()">
+                <select id="moduleFilter" class="filter-select" onchange="filterByModule()">
+                    <option value="">All Modules</option>
+                    <option value="payroll">Payroll</option>
+                    <option value="attendance">Attendance</option>
+                    <option value="leave">Leave</option>
+                    <option value="recruitment">Recruitment</option>
+                    <option value="performance">Performance</option>
+                    <option value="general">General</option>
+                </select>
+                <button class="btn btn-primary" onclick="openKnowledgeModal()">
+                    <i class="fas fa-plus"></i> Add Knowledge
+                </button>
+                <button class="btn btn-secondary" onclick="refreshKnowledge()">
+                    <i class="fas fa-sync"></i> Refresh
+                </button>
+            </div>
+
+            <div class="table-container">
+                <table id="knowledgeTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Module</th>
+                            <th>Question</th>
+                            <th>Answer</th>
+                            <th>Keywords</th>
+                            <th>Usage</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="knowledgeTableBody">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination" id="knowledgePagination">
+                <!-- Dynamic pagination -->
+            </div>
+        </div>
+
+        <!-- Training Data Tab -->
+        <div id="training-tab" class="tab-content">
+            <div class="toolbar">
+                <input type="text" id="searchTraining" class="search-box" placeholder="Search training data...">
+                <select id="trainingModuleFilter" class="filter-select">
+                    <option value="">All Modules</option>
+                    <option value="payroll">Payroll</option>
+                    <option value="attendance">Attendance</option>
+                    <option value="leave">Leave</option>
+                    <option value="recruitment">Recruitment</option>
+                    <option value="performance">Performance</option>
+                </select>
+                <button class="btn btn-success" onclick="openTrainingModal()">
+                    <i class="fas fa-plus"></i> Add Training Data
+                </button>
+                <button class="btn btn-secondary" onclick="exportTrainingData()">
+                    <i class="fas fa-download"></i> Export
+                </button>
+            </div>
+
+            <div class="table-container">
+                <table id="trainingTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Input Text</th>
+                            <th>Output Text</th>
+                            <th>Module</th>
+                            <th>Source</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trainingTableBody">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics-tab" class="tab-content">
+            <div class="toolbar">
+                <button class="btn btn-primary" onclick="loadAnalytics()">
+                    <i class="fas fa-sync"></i> Refresh Analytics
+                </button>
+            </div>
+            
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="totalConversations">0</div>
+                    <div class="stat-label">Total Conversations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="kbSuccessRate">0%</div>
+                    <div class="stat-label">KB Success Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="avgResponseTime">0ms</div>
+                    <div class="stat-label">Avg Response Time</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="topModule">-</div>
+                    <div class="stat-label">Top Module</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Knowledge Modal -->
+    <div id="knowledgeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title" id="knowledgeModalTitle">Add Knowledge Item</h2>
+                <button class="close-btn" onclick="closeKnowledgeModal()">&times;</button>
+            </div>
+            <form id="knowledgeForm">
+                <input type="hidden" id="knowledgeId">
+                <div class="form-group">
+                    <label class="form-label">Module</label>
+                    <select id="knowledgeModule" class="form-select" required>
+                        <option value="">Select Module</option>
+                        <option value="payroll">Payroll</option>
+                        <option value="attendance">Attendance</option>
+                        <option value="leave">Leave</option>
+                        <option value="recruitment">Recruitment</option>
+                        <option value="performance">Performance</option>
+                        <option value="general">General</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Question</label>
+                    <input type="text" id="knowledgeQuestion" class="form-input" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Answer</label>
+                    <textarea id="knowledgeAnswer" class="form-textarea" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Keywords</label>
+                    <input type="text" id="keywordInput" class="form-input" placeholder="Type keyword and press Enter">
+                    <div class="keywords-input" id="keywordsContainer"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeKnowledgeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Knowledge</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Training Modal -->
+    <div id="trainingModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Add Training Data</h2>
+                <button class="close-btn" onclick="closeTrainingModal()">&times;</button>
+            </div>
+            <form id="trainingForm">
+                <div class="form-group">
+                    <label class="form-label">Input Text (Question)</label>
+                    <textarea id="trainingInput" class="form-textarea" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Output Text (Answer)</label>
+                    <textarea id="trainingOutput" class="form-textarea" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Module</label>
+                    <select id="trainingModule" class="form-select">
+                        <option value="general">General</option>
+                        <option value="payroll">Payroll</option>
+                        <option value="attendance">Attendance</option>
+                        <option value="leave">Leave</option>
+                        <option value="recruitment">Recruitment</option>
+                        <option value="performance">Performance</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Source</label>
+                    <input type="text" id="trainingSource" class="form-input" value="manual">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeTrainingModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success">Add Training Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="admin_dashboard.js"></script>
+</body>
+</html>

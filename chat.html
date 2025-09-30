@@ -1,0 +1,443 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sapience HCM AI Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 700px;
+        }
+
+        .chat-header {
+            background: #2563eb;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+            .chat-header h1 {
+                font-size: 1.5em;
+                margin-bottom: 5px;
+            }
+
+            .chat-header p {
+                opacity: 0.9;
+                font-size: 0.9em;
+            }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8fafc;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+            .message.user {
+                justify-content: flex-end;
+            }
+
+            .message.bot {
+                justify-content: flex-start;
+            }
+
+        .message-content {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 0.95em;
+            line-height: 1.4;
+        }
+
+        .message.user .message-content {
+            background: #2563eb;
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.bot .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .message-info {
+            font-size: 0.7em;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .module-select {
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: white;
+            font-size: 0.9em;
+            min-width: 120px;
+        }
+
+        #messageInput {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+            #messageInput:focus {
+                border-color: #2563eb;
+            }
+
+        .send-button {
+            padding: 12px 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.3s;
+        }
+
+            .send-button:hover {
+                background: #1d4ed8;
+            }
+
+            .send-button:disabled {
+                background: #9ca3af;
+                cursor: not-allowed;
+            }
+
+        .suggested-questions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .suggestion-chip {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 6px 12px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+            .suggestion-chip:hover {
+                background: #2563eb;
+                color: white;
+            }
+
+        .typing-indicator {
+            display: none;
+            padding: 12px 16px;
+            background: white;
+            border-radius: 18px;
+            border-bottom-left-radius: 5px;
+            border: 1px solid #e2e8f0;
+            max-width: 80%;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #9ca3af;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+            .typing-dot:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+
+            .typing-dot:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+
+        .confidence-badge {
+            display: inline-block;
+            background: #10b981;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            margin-left: 8px;
+        }
+
+        .welcome-message {
+            text-align: center;
+            color: #6b7280;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🤖 Sapience HCM AI</h1>
+            <p>Your HR Assistant for Payroll, Attendance & More</p>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="welcome-message">
+                <p>Hello! I'm your Sapience HCM assistant. How can I help you today?</p>
+            </div>
+        </div>
+
+        <div class="chat-input-container">
+            <div class="input-group">
+                <select class="module-select" id="moduleSelect">
+                    <option value="general">General</option>
+                    <option value="payroll">Payroll</option>
+                    <option value="attendance">Attendance</option>
+                    <option value="leave">Leave</option>
+                    <option value="recruitment">Recruitment</option>
+                </select>
+                <input type="text" id="messageInput" placeholder="Ask about HCM modules..." autocomplete="off">
+                <button class="send-button" id="sendButton" onclick="sendMessage()">Send</button>
+            </div>
+
+            <div class="suggested-questions">
+                <div class="suggestion-chip" onclick="askSuggested('How to process payroll?', 'payroll')">💰 Process Payroll</div>
+                <div class="suggestion-chip" onclick="askSuggested('How to mark attendance?', 'attendance')">📊 Mark Attendance</div>
+                <div class="suggestion-chip" onclick="askSuggested('Salary calculation', 'payroll')">🧮 Salary Calc</div>
+                <div class="suggestion-chip" onclick="askSuggested('Leave approval process', 'attendance')">🏖️ Leave Approval</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8000';
+        let isWaitingForResponse = false;
+
+        // DOM elements
+        const chatMessages = document.getElementById('chatMessages');
+        const messageInput = document.getElementById('messageInput');
+        const sendButton = document.getElementById('sendButton');
+        const moduleSelect = document.getElementById('moduleSelect');
+
+        // Enter key to send message
+        messageInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !isWaitingForResponse) {
+                sendMessage();
+            }
+        });
+
+        // Auto-resize input
+        messageInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            const module = moduleSelect.value;
+
+            if (!message || isWaitingForResponse) return;
+
+            // Add user message to chat
+            addMessage(message, 'user');
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+
+            // Show typing indicator
+            showTypingIndicator();
+
+            // Send to API
+            callAIAPI(message, module);
+        }
+
+        function askSuggested(question, module) {
+            moduleSelect.value = module;
+            messageInput.value = question;
+            sendMessage();
+        }
+
+        function addMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = text;
+
+            messageDiv.appendChild(contentDiv);
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function addBotMessage(text, confidence, source) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+
+            let messageHTML = text;
+            if (confidence && confidence > 0.5) {
+                messageHTML += `<span class="confidence-badge">${Math.round(confidence * 100)}% confident</span>`;
+            }
+
+            contentDiv.innerHTML = messageHTML;
+
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'message-info';
+            infoDiv.textContent = `Source: ${source} | ${new Date().toLocaleTimeString()}`;
+
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(infoDiv);
+            chatMessages.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function showTypingIndicator() {
+            const typingDiv = document.createElement('div');
+            typingDiv.className = 'message bot';
+            typingDiv.id = 'typingIndicator';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'typing-indicator';
+            contentDiv.style.display = 'flex';
+
+            const dotsDiv = document.createElement('div');
+            dotsDiv.className = 'typing-dots';
+            dotsDiv.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            `;
+
+            contentDiv.appendChild(dotsDiv);
+            typingDiv.appendChild(contentDiv);
+            chatMessages.appendChild(typingDiv);
+            scrollToBottom();
+
+            isWaitingForResponse = true;
+            sendButton.disabled = true;
+        }
+
+        function hideTypingIndicator() {
+            const typingIndicator = document.getElementById('typingIndicator');
+            if (typingIndicator) {
+                typingIndicator.remove();
+            }
+            isWaitingForResponse = false;
+            sendButton.disabled = false;
+        }
+
+        async function callAIAPI(question, module) {
+            try {
+                const response = await fetch(`${API_BASE}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        module: module
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                hideTypingIndicator();
+                addBotMessage(data.answer, data.confidence, data.source);
+
+            } catch (error) {
+                console.error('Error calling API:', error);
+                hideTypingIndicator();
+                addBotMessage('Sorry, I encountered an error. Please make sure the AI server is running on localhost:8000', 0, 'error');
+            }
+        }
+
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Focus input on load
+        messageInput.focus();
+
+        // Test connection on load
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                console.log('API connection:', data.status);
+            } catch (error) {
+                console.warn('API not reachable:', error);
+            }
+        }
+
+        testConnection();
+    </script>
+</body>
+</html>
