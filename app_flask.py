@@ -649,90 +649,38 @@ def add_knowledge_item():
     return jsonify({"message": "Knowledge item added successfully", "status": "success"})
 
 @app.route("/knowledge", methods=["GET"])
-def search_knowledge(self, query, module=None, limit=5):
-    """Search knowledge base with SIMPLE matching"""
-    conn = sqlite3.connect(self.db_path)
-    cursor = conn.cursor()
-    
-    # Clean the query
-    clean_query = query.strip().lower()
-    print(f"🔍 SEARCH: '{clean_query}' in module: '{module}'")
-    
-    if module and clean_query:
-        # SIMPLE search - just look for the query in questions
+def get_knowledge_items():
+    """Get all knowledge items"""
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        
+        conn = sqlite3.connect(knowledge_db.db_path)
+        cursor = conn.cursor()
+        
         cursor.execute('''
-            SELECT * FROM knowledge_items 
-            WHERE module = ? AND (
-                question LIKE ? OR 
-                question LIKE ? OR
-                answer LIKE ?
-            )
-            ORDER BY 
-                CASE 
-                    WHEN question LIKE ? THEN 3
-                    WHEN question LIKE ? THEN 2
-                    ELSE 1
-                END DESC,
-                usage_count DESC
-            LIMIT ?
-        ''', (
-            module,
-            f'%{clean_query}%',      # Anywhere in question
-            f'{clean_query}%',       # Starts with query
-            f'%{clean_query}%',      # Anywhere in answer
-            f'{clean_query}%',       # For scoring - starts with
-            f'%{clean_query}%',      # For scoring - contains
-            limit
-        ))
-    elif module:
-        cursor.execute('''
-            SELECT * FROM knowledge_items 
-            WHERE module = ?
-            ORDER BY usage_count DESC
-            LIMIT ?
-        ''', (module, limit))
-    elif clean_query:
-        cursor.execute('''
-            SELECT * FROM knowledge_items 
-            WHERE question LIKE ? OR answer LIKE ?
-            ORDER BY 
-                CASE 
-                    WHEN question LIKE ? THEN 2
-                    ELSE 1
-                END DESC,
-                usage_count DESC
-            LIMIT ?
-        ''', (
-            f'%{clean_query}%',
-            f'%{clean_query}%',
-            f'{clean_query}%',
-            limit
-        ))
-    else:
-        cursor.execute('''
-            SELECT * FROM knowledge_items 
-            ORDER BY usage_count DESC
+            SELECT id, module, question, answer, keywords, usage_count 
+            FROM knowledge_items 
+            ORDER BY id DESC 
             LIMIT ?
         ''', (limit,))
-    
-    results = []
-    for row in cursor.fetchall():
-        results.append({
-            'id': row[0],
-            'module': row[1],
-            'question': row[2],
-            'answer': row[3],
-            'keywords': json.loads(row[4]) if row[4] else [],
-            'usage_count': row[5]
-        })
-    
-    conn.close()
-    
-    print(f"✅ SEARCH RESULTS: {len(results)} matches")
-    for result in results:
-        print(f"   - '{result['question']}'")
-    
-    return results
+        
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                'id': row[0],
+                'module': row[1],
+                'question': row[2],
+                'answer': row[3],
+                'keywords': json.loads(row[4]) if row[4] else [],
+                'usage_count': row[5]
+            })
+        
+        conn.close()
+        
+        return jsonify({"results": results, "count": len(results)})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/knowledge/<int:item_id>", methods=["DELETE"])
 def delete_knowledge_item(item_id):
